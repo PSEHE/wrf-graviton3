@@ -19,7 +19,7 @@
     - [List of HPC compilers for Graviton](#list-of-hpc-compilers-for-graviton)
 
 ## Introduction
-[C7gn/Hpc7g](https://aws.amazon.com/blogs/aws/new-amazon-ec2-instance-types-in-the-works-c7gn-r7iz-and-hpc7g) instances are the latest additions to Graviton based EC2 instances, optimized for network and compute intensive High-Performance Computing (HPC) applications. This document is aimed to help HPC users get the optimal performance on Graviton instances. It covers the recommended compilers, libraries, and runtime configurations for building and running HPC applications. Along with the recommended software configuration, the document also provides example scripts to get started with 3 widely used open-source HPC applications: Weather Research and Forecasting (WRF), Open Source Field Operation And Manipulation (OpenFOAM) and Gromacs.
+[C7gn/Hpc7g](https://aws.amazon.com/blogs/aws/new-amazon-ec2-instance-types-in-the-works-c7gn-r7iz-and-hpc7g) instances are the latest additions to Graviton based EC2 instances, optimized for network and compute intensive High-Performance Computing (HPC) applications. This document is aimed to help HPC users get the optimal performance on Graviton instances. It covers the recommended compilers, libraries, and runtime configurations for building and running HPC applications. Along with the recommended software configuration, the document also provides example scripts to get started with the latest version of Weather Research and Forecasting (WRF) 4.5.1 and WPS applications.
 
 ## Summary of the recommended configuration
 Instance type: C7gn and HPC7g (Graviton3E processor, max 200 Gbps network bandwidth, 2 GB RAM/vCPU)
@@ -40,7 +40,7 @@ ArmPL: v23.04 & later (included in the ACfL compiler)
 MPI: Open MPI v4.1.4 & later (the latest official release)
 
 ## Instructions for setting up the HPC cluster for best performance
-We recommend using [AWS ParallelCluster](https://docs.aws.amazon.com/parallelcluster/latest/ug/what-is-aws-parallelcluster.html) (previously known as [CfnCluster](http://cfncluster.readthedocs.io)) to deploy and manage HPC clusters  on AWS EC2. AWS ParallelCluster 3.5.1 is a tool that can automatically set up the required compute resources, job scheduler, and shared filesystem commonly needed to run HPC applications. This section covers step-by-step instructions on how to set up or upgrade the tools and software packages to the recommended versions on a new ParallelCluster. Please refer to the individual sub-sections if you need to update certain software package on an existing cluster. For a new cluster setup, you can use [this template](scripts-setup/hpc7g-ubuntu2004-useast1.yaml) and replace the subnet, S3 bucket name for [custom action script](scripts-setup/install-gcc-11.sh), and ssh key information from your account to create a Ubuntu 20.04 cluster. The command to create a new cluster is
+It is recommended to use [AWS ParallelCluster](https://docs.aws.amazon.com/parallelcluster/latest/ug/what-is-aws-parallelcluster.html) in order to deploy and manage HPC clusters on AWS EC2. AWS ParallelCluster 3.6.0 is a tool that can automatically set up the required compute resources, job scheduler, and shared filesystem commonly needed to run HPC applications. This section covers step-by-step instructions on how to set up or upgrade the tools and software packages to the recommended versions on a new ParallelCluster. Please refer to the individual sub-sections if you need to update certain software package on an existing cluster. For a new cluster setup, you can use [this template](hpc7g-ubuntu2004-useast1.yaml) and replace the subnet, and ssh key information from your account to create a Ubuntu 20.04 cluster. The command to create a new cluster is
 ```
 pcluster create-cluster --cluster-name test-cluster --cluster-configuration hpc7g-ubuntu2004-useast1.yaml
 ```
@@ -60,15 +60,15 @@ Alternatively, you can also use `pcluster describe-cluster --cluster-name test-c
     "state": "running",
     "privateIpAddress": "10.0.1.55"
   },
-  "version": "3.5.1",
+  "version": "3.6.0",
   ...
 }
 ```
 
-You can log in to the headNode in the same way as a regular EC2 instance. Run the [setup script](scripts-setup/install-tools-headnode-ubuntu2004.sh) with command `./scripts-setup/install-tools-headnode-ubuntu2004.sh` to install the required tools and packages (ACfL and Open MPI) on the shared storage, `/shared`.
+You can log in to the headNode in the same way as a regular EC2 instance. Run the [setup script](scripts-setup/install-tools-headnode-ubuntu2004.sh) with command `./install-tools-headnode-ubuntu2004.sh` to install the required tools and packages (ACfL and Open MPI) on the shared storage, `/shared`.
 
 ### Compilers
-Many HPC applications depend on compiler optimizations for better performance. We recommend using [Arm Compiler for Linux (ACfL)](https://developer.arm.com/Tools%20and%20Software/Arm%20Compiler%20for%20Linux) because it is tailored for HPC codes and comes with Arm Performance Libraries (ArmPL), which includes optimized BLAS, LAPACK, FFT and math libraries. Follow the below instructions to install and use ACfL 23.04 (latest version as of Apr 2023) or run the installation script with command `./scripts-setup/0-install-acfl.sh`.
+Many HPC applications depend on compiler optimizations for better performance. We recommend using [Arm Compiler for Linux (ACfL)](https://developer.arm.com/Tools%20and%20Software/Arm%20Compiler%20for%20Linux) because it is tailored for HPC codes and comes with Arm Performance Libraries (ArmPL), which includes optimized BLAS, LAPACK, FFT and math libraries. Follow the below instructions to install and use ACfL 23.04 (latest version as of Apr 2023) or run the installation script with command `./install-compilers-headnode-ubuntu2004.sh`.
 ```
 # Install environment modules
 sudo apt install environment-modules
@@ -98,28 +98,10 @@ Alternatively:  $ export MODULEPATH=$MODULEPATH:/shared/arm/modulefiles
 Please refer to [Appendix](#list-of-hpc-compilers-for-graviton) for a partial list of other HPC compilers with Graviton support.
 
 ### Computation libraries
-Using highly optimized linear algebra and FFT libraries can significantly speed-up the computation for certain HPC applications. We recommend [Arm Performance Libraries (ArmPL)](https://developer.arm.com/documentation/102574/0100) because it offers a vectorized math library (libamath), BLAS, LAPACK, and FFT libraries with better performance compared to other implementations like OpenBLAS or FFTW. ArmPL can be used with the `-armpl` flag for ACfL; ArmPL can also be use with other compilers, for example GCC, by adding compilation options:  `-I${ARMPL_INCLUDES} -L${ARMPL_LIBRARIES} -larmpl`.
-
-ACfL includes the ArmPL packages as well. If you wish to just install the ArmPL, follow the below steps or use script with command `./scripts-setup/1-install-armpl.sh`.
-```
-# Find the download link to ArmPL (Ubuntu 20.04, GCC-12) on https://developer.arm.com/downloads/-/arm-performance-libraries
-mkdir -p /shared/tools && cd /shared/tools
-wget -O arm-performance-libraries_23.04_Ubuntu-20.04_gcc-10.2.tar <link to ArmPL.tar>
-tar xf arm-performance-libraries_23.04_Ubuntu-20.04_gcc-10.2.tar
-cd arm-performance-libraries_23.04_Ubuntu-20.04/
-./arm-performance-libraries_23.04_Ubuntu-20.04.sh -i /shared/arm -a --force
-```
-You will see the following message if the installation is successful.
-```
-Unpacking...
-Installing...The installed packages contain modulefiles under /shared/arm/modulefiles
-You can add these to your environment by running:
-                $ module use /shared/arm/modulefiles
-Alternatively:  $ export MODULEPATH=$MODULEPATH:/shared/arm/modulefiles
-```
+Using highly optimized linear algebra and FFT libraries can significantly speed-up the computation for certain HPC applications. We recommend [Arm Performance Libraries (ArmPL)](https://developer.arm.com/documentation/102574/0100) because it offers a vectorized math library (libamath), BLAS, LAPACK, and FFT libraries with better performance compared to other implementations like OpenBLAS or FFTW. ArmPL can be used with the `-armpl` flag for ACfL; For our case, it the flag is already enabled, but ArmPL can also be use with other compilers, for example GCC, by adding compilation options:  `-I${ARMPL_INCLUDES} -L${ARMPL_LIBRARIES} -larmpl`.
 
 ### EFA support
-C7gn/Hpc7g instances come with an EFA (Elastic Fabric Adapter) interface for low latency node to node communication that offers a peak bandwidth of 200Gbps. Getting the correct EFA driver is crucial for the performance of network intensive HPC applications.  AWS parallel cluster 3.5.1 comes with the latest EFA driver, that supports the EFA interface on C7gn and Hpc7g. If you prefer to stay with an existing cluster generated by earlier versions of AWS ParallelCluster, please follow the steps below to check the EFA driver version and [upgrade the driver](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa-start.html#efa-start-enable) if necessary.
+C7gn/Hpc7g instances come with an EFA (Elastic Fabric Adapter) interface for low latency node to node communication that offers a peak bandwidth of 200Gbps. Getting the correct EFA driver is crucial for the performance of network intensive HPC applications.  AWS parallel cluster 3.6.0 comes with the latest EFA driver, that supports the EFA interface on C7gn and Hpc7g (Just make sure you load the module libfabric-aws/1.17.1). If you prefer to stay with an existing cluster generated by earlier versions of AWS ParallelCluster, please follow the steps below to check the EFA driver version and [upgrade the driver](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa-start.html#efa-start-enable) if necessary.
 ```
 # ssh into a compute instance after it is configured
 fi_info -p efa
@@ -137,11 +119,11 @@ provider: efa
 ```
 
 ### Open MPI
-For applications that use the Message Passing Interface (MPI) to communicate, we recommend using Open MPI v4.1.4 or later for Graviton Instances. AWS Parallel cluster 3.5.1 provides the Open MPI libraries built with default GCC. For best performance, it is recommended to re-compile them with ACfL 23.04 or GCC-11 and later version. The following snippet provides instructions on how to build Open MPI 4.1.4 with ACfL 23.04 or use the script with command `./scripts-setup/2a-install-openmpi-with-acfl.sh`.
+For applications that use the Message Passing Interface (MPI) to communicate, we recommend using Open MPI v4.1.5 or later for Graviton Instances. AWS Parallel cluster 3.6.0 provides the Open MPI libraries built with default GCC. For best performance, it is recommended to re-compile them with ACfL 23.04 or GCC-11 and later version. The following snippet provides instructions on how to build Open MPI 4.1.5 with ACfL 23.04 or use the script that installs OpenMPI along with the rest of the tools with command `./install-wrf-tools.sh`.
 ```
 # compile Open MPI with ACfL
 export INSTALLDIR=/shared
-export OPENMPI_VERSION=4.1.4
+export OPENMPI_VERSION=4.1.5
 module use /shared/arm/modulefiles
 module load acfl
 export CC=armclang
@@ -151,9 +133,9 @@ export CFLAGS="-mcpu=neoverse-512tvb"
 
 # assuming the efa driver is installed at the default directory /opt/amazon/efa
 cd /shared/tools
-wget -N https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.4.tar.gz
-tar -xzvf openmpi-4.1.4.tar.gz
-cd openmpi-4.1.4
+wget -N https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
+tar -xzvf openmpi-4.1.5.tar.gz
+cd openmpi-4.1.5
 mkdir build-acfl
 cd build-acfl
 ../configure --prefix=${INSTALLDIR}/openmpi-${OPENMPI_VERSION}-acfl --enable-mpirun-prefix-by-default --without-verbs --disable-man-pages --enable-builtin-atomics --with-libfabric=/opt/amazon/efa  --with-libfabric-libdir=/opt/amazon/efa/lib
@@ -162,8 +144,8 @@ make -j$(nproc) && make install
 
 To check if the Open MPI build with ACfL,
 ```
-export PATH=/shared/openmpi-4.1.4-acfl/bin:$PATH
-export LD_LIBRARY_PATH=/shared/openmpi-4.1.4-acfl/lib:$LD_LIBRARY_PATH
+export PATH=/shared/openmpi-4.1.5-acfl/bin:$PATH
+export LD_LIBRARY_PATH=/shared/openmpi-4.1.5-acfl/lib:$LD_LIBRARY_PATH
 mpicc --version
 ```
 
@@ -185,17 +167,19 @@ WRF (Weather Research & Forecasting)	| v4.5+	| ACfL	| 8 CPUs per rank
 
 
 ### WRF
-The WRF model is one of the most used numerical weather prediction (NWP) systems. WRF is used extensively for research and real-time forecasting. Large amount of computation resources are required for each simulation, especially for high resolution simulations. We recommend using [WRF 4.5](https://github.com/wrf-model/WRF/releases#wrf-version-4.5). 
+The WRF model is one of the most used numerical weather prediction (NWP) systems. WRF is used extensively for research and real-time forecasting. Large amount of computation resources are required for each simulation, especially for high resolution simulations. We recommend using [WRF 4.5.1](https://github.com/wrf-model/WRF/releases#wrf-version-4.5.1). 
 
 The WRF Pre-Processing System (WPS) preapres a domain (region of the Earth) for input to WRF. We recommend using [WPS 4.5](https://github.com/wrf-model/WPS/releases/tag/v4.5).
 
-#### Build WRF 4.5 with ACFL on Graviton
-Use [this script](scripts-wrf/install-wrf-tools-acfl.sh) with command `./scripts-wrf/install-wrf-tools-acfl.sh` to install the required tools: zlib, hdf5, pnetcdf, netcdf-c, and netcdf-fortran. Or use [these scripts](scripts-wrf) in the numeric order to install the tools sequentially. You will get [this message](scripts-wrf/pnetcdf-success-message.txt) if pnetcdf installation is successful; [this message](scripts-wrf/netcdf-c-success-message.txt) if netcdf-c installation is successful; [this message](scripts-wrf/netcdf-fortran-success-message.txt) if netcdf-fortran installation is successful.
-Use [this script](scripts-wrf/compile-wrf-v45-acfl.sh) with command `./scripts-wrf/compile-wrf-v45-acfl.sh` to configure and compile WRF.
+#### Build WRF 4.5.1 with ACFL on Graviton
+If you haven't done it in the previous step, use [this script](install-wrf-tools-acfl.sh) with command `./install-wrf-tools-acfl.sh` to install the required tools: zlib, hdf5, pnetcdf, netcdf-c, and netcdf-fortran. You will get [this message](scripts-wrf/pnetcdf-success-message.txt) if pnetcdf installation is successful; [this message](images/netcdf-c-success-message.txt) if netcdf-c installation is successful; [this message](images/netcdf-fortran-success-message.txt) if netcdf-fortran installation is successful.
+Use [this script](compile-wrf-v45-acfl.sh) with command `./compile-wrf-v45-acfl.sh` to configure and compile WRF.
 ```
-# get WRF source v45
+# get WRF source v4.5.1
 git clone https://github.com/wrf-model/WRF.git
-cd WRF && git checkout release-v4.5
+cd WRF
+# add the following at the end of the line above if you want a specific version
+# && git checkout release-v4.5
 
 # apply a patch that includes ACfL compiler options
 wget https://raw.githubusercontent.com/aws/aws-graviton-getting-started/main/HPC/scripts-wrf/WRF-v45-patch-acfl.diff
@@ -224,7 +208,7 @@ build completed: Fri May 12 18:10:12 UTC 2023
 ```
 
 #### Setup the runtime configuration, download and run the benchmark
-WRF uses shared memory and distributed memory programming model. It is recommended to use 8 threads per rank and setting threads affinity to be "compact" to reduce communication overhead and achieve better performance. The following is [an example Slurm script](scripts-wrf/sbatch-wrf-v45-acfl.sh) that will download the WRF CONUS 12km model and run on a single Hpc7g instance with 8 ranks and 8 threads for each rank. You can submit the Slurm job by running this command `sbatch sbatch-wrf-v45-acfl.sh`. At the end of the WRF log file from rank 0 (rsl.error.0000), you will see the following message if the job completes successfully.
+WRF uses shared memory and distributed memory programming model. It is recommended to use 8 threads per rank and setting threads affinity to be "compact" to reduce communication overhead and achieve better performance. The following is [an example Slurm script](sbatch-wrf-v45-acfl.sh) that will download the WRF CONUS 12km model and run on a single Hpc7g instance with 8 ranks and 8 threads for each rank. You can submit the Slurm job by running this command `sbatch sbatch-wrf-v45-acfl.sh`. At the end of the WRF log file from rank 0 (rsl.error.0000), you will see the following message if the job completes successfully.
 ```
 Timing for main: time 2019-11-26_23:58:48 on domain   1:    0.46453 elapsed seconds
 Timing for main: time 2019-11-27_00:00:00 on domain   1:    0.46581 elapsed seconds
@@ -243,7 +227,7 @@ echo $time_compute_steps
 ```
 
 #### Build WPS 4.5 with ACFL on Graviton
-After compiling WRF 4.5, use [this script](scripts-wrf/scripts-wps/0-install-jasper.sh) with command `./scripts-wps/0-install-jasper.sh` to install the required tools, jasper. Then, use [this script](scripts-wps/compile-wps.sh) with command `./scripts-wps/compile-wps.sh` to configure and compile WPS.
+After compiling WRF 4.5, use [this script](install-wps-tools-jasper.sh) with command `./install-wps-tools-jasper.sh` to install the required tools, jasper. Then, use [this script](compile-wps.sh) with command `./compile-wps.sh` to configure and compile WPS.
 
 ```
 # get WPS source 4.5
