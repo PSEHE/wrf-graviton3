@@ -1,0 +1,41 @@
+Region: us-east-1
+Imds:
+   ImdsSupport: v2.0
+Image:
+  Os: ubuntu2004
+HeadNode:
+  InstanceType: c7g.4xlarge
+  Networking:
+    SubnetId: subnet-xxxxxxxxxxx[your subnet id]
+  Ssh:
+    KeyName: [your pem user name]
+  LocalStorage:
+    RootVolume:
+       Size: 200
+       VolumeType: gp3
+       Encrypted: false
+Scheduling:
+  Scheduler: slurm
+  SlurmQueues:
+    - Name: hpc7g
+      CapacityType: ONDEMAND
+      Networking:
+        SubnetIds:
+          - subnet-xxxxxxxxxxxxxxx[your subnet id]
+        PlacementGroup:
+          Enabled: true
+      ComputeResources:
+        - Name: hpc7g16xlarge
+          InstanceType: hpc7g.16xlarge
+          MinCount: 0
+          MaxCount: 9
+          DisableSimultaneousMultithreading: true
+          Efa:
+            Enabled: true
+SharedStorage:
+  - MountDir: /shared
+    Name: shared
+    StorageType: Ebs
+    EbsSettings:
+       VolumeType: gp3
+       Size: 2000
